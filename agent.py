@@ -38,10 +38,16 @@ SYSTEM_PROMPT = (
     "waqt contact ka naam aur number dono dikhao. "
     "Jab user confirm kar de (haan / yes), to pichhle message ko bina dobara "
     "pooche send_message tool se bhej do. "
+    "send_message ek baar me sirf EK dafa call karo. Agar fail ho jaye to "
+    "khud dobara mat bhejo; user ko error batao aur poocho. "
     "Tumhe baat-cheet yaad rehti hai, context use karo."
 )
 
 CONFIG = {"configurable": {"thread_id": "whatsapp-session"}}
+
+# Ek user turn me kaunse (recipient, message) bheje ja chuke hain, taake model
+# retry ya parallel call se same message do dafa na bhej de.
+sent_this_turn = set()
 
 
 @wrap_tool_call
@@ -49,7 +55,19 @@ async def tool_result_as_text(request, handler):
     # Groq tool messages me sirf non-empty string chalti hai. WhatsApp MCP tools
     # kabhi khali content (sirf structured data) ya content blocks ki list dete
     # hain, is liye unhe ek text string me badal dete hain.
-    print(f"[tool] {request.tool_call['name']}({request.tool_call['args']})")
+    call = request.tool_call
+    if call["name"] == "send_message":
+        key = (str(call["args"].get("recipient")), str(call["args"].get("message")))
+        if key in sent_this_turn:
+            print(f"[tool] send_message dobara roka gaya ({key[0]})")
+            return ToolMessage(
+                content="Ye message isi baar pehle hi bhejne ki koshish ho chuki hai, "
+                "dobara nahi bheja. User ko pehli koshish ka nateeja batao.",
+                tool_call_id=call["id"],
+                name=call["name"],
+            )
+        sent_this_turn.add(key)
+    print(f"[tool] {call['name']}({call['args']})")
     result = await handler(request)
     if not isinstance(result, ToolMessage) or (isinstance(result.content, str) and result.content):
         return result
@@ -111,6 +129,7 @@ async def main():
                 print("[mic] Kuch sunai nahi diya.\n")
                 continue
             print(f"[suna] {user_input}")
+        sent_this_turn.clear()
         try:
             result = await agent.ainvoke(
                 {"messages": [{"role": "user", "content": user_input}]},
