@@ -2,11 +2,11 @@ import asyncio
 import os
 
 from dotenv import load_dotenv
+from langchain.agents import create_agent
 from langchain.chat_models import init_chat_model
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain_tavily import TavilySearch
 from langgraph.checkpoint.memory import MemorySaver
-from langgraph.prebuilt import create_react_agent
 
 load_dotenv()
 
@@ -49,7 +49,7 @@ async def build_agent():
 
     model = init_chat_model(MODEL, max_retries=6, timeout=120)
     memory = MemorySaver()
-    return create_react_agent(model, tools, prompt=SYSTEM_PROMPT, checkpointer=memory)
+    return create_agent(model, tools, system_prompt=SYSTEM_PROMPT, checkpointer=memory)
 
 
 async def main():
