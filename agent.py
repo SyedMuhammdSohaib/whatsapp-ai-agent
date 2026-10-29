@@ -1,9 +1,12 @@
 import asyncio
+import json
 import os
 
 from dotenv import load_dotenv
 from langchain.agents import create_agent
+from langchain.agents.middleware import wrap_tool_call
 from langchain.chat_models import init_chat_model
+from langchain_core.messages import ToolMessage
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain_tavily import TavilySearch
 from langgraph.checkpoint.memory import MemorySaver
@@ -29,6 +32,25 @@ SYSTEM_PROMPT = (
 CONFIG = {"configurable": {"thread_id": "whatsapp-session"}}
 
 
+@wrap_tool_call
+async def tool_result_as_text(request, handler):
+    # Groq tool messages me sirf non-empty string chalti hai. WhatsApp MCP tools
+    # kabhi khali content (sirf structured data) ya content blocks ki list dete
+    # hain, is liye unhe ek text string me badal dete hain.
+    result = await handler(request)
+    if not isinstance(result, ToolMessage) or (isinstance(result.content, str) and result.content):
+        return result
+    if isinstance(result.content, list):
+        parts = [b if isinstance(b, str) else b.get("text", "") for b in result.content]
+        text = "\n".join(p for p in parts if p)
+    else:
+        text = result.content
+    if not text and isinstance(result.artifact, dict) and result.artifact.get("structured_content"):
+        text = json.dumps(result.artifact["structured_content"], ensure_ascii=False)
+    result.content = text or "Done (tool ne koi output nahi diya)."
+    return result
+
+
 async def build_agent():
     client = MultiServerMCPClient(
         {
@@ -49,7 +71,13 @@ async def build_agent():
 
     model = init_chat_model(MODEL, max_retries=6, timeout=120)
     memory = MemorySaver()
-    return create_agent(model, tools, system_prompt=SYSTEM_PROMPT, checkpointer=memory)
+    return create_agent(
+        model,
+        tools,
+        system_prompt=SYSTEM_PROMPT,
+        middleware=[tool_result_as_text],
+        checkpointer=memory,
+    )
 
 
 async def main():
