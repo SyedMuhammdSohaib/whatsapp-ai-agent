@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 
+from contacts import find_contact
 from dotenv import load_dotenv
 from langchain.agents import create_agent
 from langchain.agents.middleware import wrap_tool_call
@@ -24,11 +25,11 @@ SYSTEM_PROMPT = (
     "Jab user kisi nayi jaankari (mausam, rate, news, koi fact) ke baare me "
     "pooche, to pehle web search tool use karo, phir jawab do. "
     "Jab user kisi ko NAAM se message bhejne ko kahe, to number mat maango. "
-    "Pehle search_contacts tool se us naam ko dhoondo; na mile to list_chats "
-    "tool me us naam se chat dhoondo. Ek hi contact mile to uska JID (ya "
-    "number) send_message ke recipient me use karo. Kai contacts milen to "
-    "unki list (naam + number) dikha kar poocho kaunsa. Number sirf tab maango "
-    "jab kisi tool se bhi contact na mile. "
+    "Pehle find_contact tool se us naam ko dhoondo (ye phone me save kiye "
+    "naam bhi dekhta hai). Ek hi contact mile to uska recipient "
+    "send_message me use karo. Kai contacts milen to unki list (naam + "
+    "number) dikha kar poocho kaunsa. Number sirf tab maango jab find_contact "
+    "se bhi contact na mile. "
     "Message bhejne se PEHLE user ko hamesha confirm karo, aur confirm karte "
     "waqt contact ka naam aur number dono dikhao. "
     "Jab user confirm kar de (haan / yes), to pichhle message ko bina dobara "
@@ -44,6 +45,7 @@ async def tool_result_as_text(request, handler):
     # Groq tool messages me sirf non-empty string chalti hai. WhatsApp MCP tools
     # kabhi khali content (sirf structured data) ya content blocks ki list dete
     # hain, is liye unhe ek text string me badal dete hain.
+    print(f"[tool] {request.tool_call['name']}({request.tool_call['args']})")
     result = await handler(request)
     if not isinstance(result, ToolMessage) or (isinstance(result.content, str) and result.content):
         return result
@@ -71,10 +73,10 @@ async def build_agent():
     wa_tools = await client.get_tools()
     print(f"[ok] WhatsApp se {len(wa_tools)} tools load hue.")
 
-    # Web search tool (Tavily)
+    # Web search (Tavily) + naam se contact dhoondhne wala tool
     web = TavilySearch(max_results=1)
-    tools = wa_tools + [web]
-    print(f"[ok] Web search tool bhi add ho gaya. Total: {len(tools)} tools.")
+    tools = wa_tools + [web, find_contact]
+    print(f"[ok] Web search aur find_contact tools bhi add ho gaye. Total: {len(tools)} tools.")
 
     model = init_chat_model(MODEL, max_retries=6, timeout=120)
     memory = MemorySaver()

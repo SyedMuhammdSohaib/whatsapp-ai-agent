@@ -9,6 +9,7 @@ Built with **LangGraph** (agent brain) + **whatsapp-mcp** (WhatsApp bridge) + **
 - Remembers conversation context (memory)
 - 12 WhatsApp tools via Model Context Protocol (MCP)
 - Web search (Tavily) for real-time info like weather, rates and news
+- Send by contact name: looks up names saved on your phone (from the bridge database), no phone number needed
 
 ## Tech Stack
 - Python, LangGraph, LangChain
