@@ -9,6 +9,7 @@ Built with **LangGraph** (agent brain) + **whatsapp-mcp** (WhatsApp bridge) + **
 - Remembers conversation context (memory)
 - 12 WhatsApp tools via Model Context Protocol (MCP)
 - Web search (Tavily) for real-time info like weather, rates and news
+- Voice input: press Enter on an empty prompt, speak, press Enter again (Groq Whisper speech-to-text)
 - Send by contact name: looks up names saved on your phone (from the bridge database), no phone number needed
 
 ## Tech Stack
@@ -30,6 +31,7 @@ Built with **LangGraph** (agent brain) + **whatsapp-mcp** (WhatsApp bridge) + **
    - `TAVILY_API_KEY=your_key_here` (for web search, get one at https://tavily.com)
    - `WHATSAPP_MCP_PATH=path/to/whatsapp-mcp/whatsapp-mcp-server`
 5. Run the agent: `python agent.py`
+   - Type a request, or press Enter on an empty `tum>` prompt to speak it (needs a microphone and `GROQ_API_KEY`).
 
 ## How it works
 You type a request in plain language. The LangGraph agent interprets it, asks for

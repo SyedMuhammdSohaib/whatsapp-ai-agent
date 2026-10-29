@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 
+import voice
 from contacts import find_contact
 from dotenv import load_dotenv
 from langchain.agents import create_agent
@@ -30,6 +31,9 @@ SYSTEM_PROMPT = (
     "send_message me use karo. Kai contacts milen to unki list (naam + "
     "number) dikha kar poocho kaunsa. Number sirf tab maango jab find_contact "
     "se bhi contact na mile. "
+    "User kabhi bol kar (voice) likhwata hai, to text Urdu script me ya "
+    "galat spelling ke saath aa sakta hai; naam ko Roman/English me badal kar "
+    "find_contact karo, aur jawab hamesha Roman Urdu me do. "
     "Message bhejne se PEHLE user ko hamesha confirm karo, aur confirm karte "
     "waqt contact ka naam aur number dono dikhao. "
     "Jab user confirm kar de (haan / yes), to pichhle message ko bina dobara "
@@ -91,13 +95,22 @@ async def build_agent():
 
 async def main():
     agent = await build_agent()
-    print("\nWhatsApp Agent ready (web search + memory). exit = band.\n")
+    print("\nWhatsApp Agent ready (web search + memory + voice).")
+    print("Likh kar poocho, ya sirf Enter dabao aur bol kar poocho. exit = band.\n")
     while True:
         user_input = input("tum> ").strip()
         if user_input.lower() in {"exit", "quit", "q"}:
             break
         if not user_input:
-            continue
+            try:
+                user_input = voice.listen()
+            except Exception as e:
+                print(f"[voice/error] {type(e).__name__}: {e}\n")
+                continue
+            if not user_input:
+                print("[mic] Kuch sunai nahi diya.\n")
+                continue
+            print(f"[suna] {user_input}")
         try:
             result = await agent.ainvoke(
                 {"messages": [{"role": "user", "content": user_input}]},
