@@ -11,6 +11,7 @@ Built with **LangGraph** (agent brain) + **whatsapp-mcp** (WhatsApp bridge) + **
 - Web search (Tavily) for real-time info like weather, rates and news
 - Voice input: press Enter on an empty prompt, speak, press Enter again (Groq Whisper speech-to-text)
 - Send by contact name: looks up names saved on your phone (from the bridge database), no phone number needed
+- YouTube in the web app: play any video or song, pause, resume, skip forward or back, and ask what a video contains (uses its transcript)
 
 ## Tech Stack
 - Python, LangGraph, LangChain

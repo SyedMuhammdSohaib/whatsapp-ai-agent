@@ -5,6 +5,18 @@ import { useState, useRef, useEffect } from "react";
 const API = "http://127.0.0.1:8000";
 const SILENCE_MS = 4000; // itni der chup rehne par message chala jaye
 const NO_SPEECH_MS = 10000; // kuch bola hi nahi to mic band
+const SPEAKING_VOLUME = 20; // agent bol raha ho to video ki awaaz halki
+
+let youtubeApi;
+function loadYouTubeApi() {
+  youtubeApi ??= new Promise((resolve) => {
+    window.onYouTubeIframeAPIReady = () => resolve(window.YT);
+    const script = document.createElement("script");
+    script.src = "https://www.youtube.com/iframe_api";
+    document.body.appendChild(script);
+  });
+  return youtubeApi;
+}
 
 export default function Home() {
   const [messages, setMessages] = useState([
@@ -18,6 +30,10 @@ export default function Home() {
   const endRef = useRef(null);
   const recRef = useRef(null);
   const audioRef = useRef(null);
+  const [videoOn, setVideoOn] = useState(false);
+  const playerRef = useRef(null);
+  const videoRef = useRef(null);
+  const queueRef = useRef([]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -43,7 +59,60 @@ export default function Home() {
       const audio = new Audio(url);
       audioRef.current = audio;
       await audio.play(); // await taake play ka error neeche catch ho jaye
+      const player = playerRef.current;
+      if (player?.getVolume) {
+        const volume = player.getVolume();
+        player.setVolume(Math.min(volume, SPEAKING_VOLUME));
+        audio.onended = audio.onpause = () => player.setVolume(volume);
+      }
     } catch (e) {}
+  }
+
+  // Kuch videos embed nahi hoti, un par player error deta hai to agli chalao
+  async function playNext() {
+    const next = queueRef.current.shift();
+    if (!next) {
+      videoRef.current = null;
+      setVideoOn(false);
+      setMessages((m) => [...m, { role: "agent", text: "⚠️ Ye video yahan nahi chal saki. Koi aur try karo." }]);
+      return;
+    }
+    videoRef.current = next;
+    setVideoOn(true);
+    const YT = await loadYouTubeApi();
+    if (playerRef.current) {
+      playerRef.current.loadVideoById(next.id);
+      return;
+    }
+    playerRef.current = new YT.Player("yt-player", {
+      videoId: next.id,
+      playerVars: { autoplay: 1, playsinline: 1 },
+      events: {
+        onReady: (e) => e.target.playVideo(),
+        onError: () => playNext(),
+      },
+    });
+  }
+
+  function runYoutube({ action, videos, seconds }) {
+    if (action === "play") {
+      queueRef.current = [...videos];
+      playNext();
+      return;
+    }
+    const player = playerRef.current;
+    if (!player?.getCurrentTime) return;
+    const now = player.getCurrentTime();
+    if (action === "pause") player.pauseVideo();
+    if (action === "resume") player.playVideo();
+    if (action === "forward") player.seekTo(now + seconds, true);
+    if (action === "backward") player.seekTo(Math.max(0, now - seconds), true);
+    if (action === "seek_to") player.seekTo(seconds, true);
+    if (action === "stop") {
+      player.stopVideo();
+      videoRef.current = null;
+      setVideoOn(false);
+    }
   }
 
   async function sendText(text) {
@@ -56,11 +125,18 @@ export default function Home() {
       const res = await fetch(`${API}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: msg, thread_id: "web-session" }),
+        body: JSON.stringify({
+          message: msg,
+          thread_id: "web-session",
+          video_id: videoRef.current?.id ?? "",
+          video_title: videoRef.current?.title ?? "",
+          video_time: playerRef.current?.getCurrentTime?.() ?? 0,
+        }),
       });
       const data = await res.json();
       setMessages((m) => [...m, { role: "agent", text: data.reply }]);
-      speak(data.reply);
+      data.youtube?.forEach(runYoutube);
+      if (!data.youtube?.length) speak(data.reply); // gaane ke upar "chala di" na bole
     } catch (e) {
       setMessages((m) => [
         ...m,
@@ -118,6 +194,7 @@ export default function Home() {
         return;
       }
       setListening(false);
+      playerRef.current?.unMute?.();
       const text = (finalText + interim).trim();
       if (text) sendText(text);
     };
@@ -129,6 +206,7 @@ export default function Home() {
     };
     recRef.current = { stop: finish };
     setListening(true);
+    playerRef.current?.mute?.(); // warna mic gaane ko bhi sun leta hai aur chup hona pata nahi chalta
     waitFor(NO_SPEECH_MS);
     rec.start();
   }
@@ -161,6 +239,10 @@ export default function Home() {
             </button>
           </div>
         </header>
+
+        <div className={`player ${videoOn ? "" : "off"}`}>
+          <div id="yt-player" />
+        </div>
 
         <div className="messages">
           {messages.map((m, i) => (
@@ -225,6 +307,9 @@ export default function Home() {
         .icon { background: rgba(255,255,255,0.1); border: none; border-radius: 10px; padding: 6px 9px; font-size: 15px; cursor: pointer; }
         .icon.on { background: rgba(124,58,237,0.5); }
 
+        .player { flex-shrink: 0; aspect-ratio: 16 / 9; background: #000; }
+        .player.off { display: none; }
+        .player iframe { display: block; width: 100%; height: 100%; border: 0; }
         .messages { flex: 1; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 12px; }
         .row { display: flex; }
         .row.user { justify-content: flex-end; }

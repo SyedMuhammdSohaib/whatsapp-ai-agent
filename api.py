@@ -21,6 +21,7 @@ from langchain.chat_models import init_chat_model
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain_tavily import TavilySearch
 from langgraph.checkpoint.memory import MemorySaver
+from youtube import YOUTUBE_TOOLS
 
 load_dotenv()
 
@@ -43,6 +44,12 @@ SYSTEM_PROMPT = (
     "Message bhejne se PEHLE user ko hamesha confirm karo. "
     "Jab user confirm kar de (haan / yes), to pichhle message ko bina dobara "
     "pooche send_message tool se bhej do. "
+    "YouTube ke liye: video ya gaana chalane ko play_youtube, rokne, chalane aur "
+    "aage-peeche karne ko control_youtube, aur video ke andar kya hai ya use samjhane "
+    "ko explain_youtube_video use karo. YouTube ke kaam ke liye confirm mat karo, foran karo "
+    "(confirm sirf WhatsApp message ke liye hai). Ye kaam tool ke baghair kabhi mat bolo ke ho gaya. "
+    "Chalti video ke baare me koi bhi sawal ho to pehle explain_youtube_video chalao, "
+    "user se transcript ya naam mat maango. "
     "Tumhe baat-cheet yaad rehti hai, context use karo. Jawab hamesha CHHOTA aur seedha rakho (1-2 line), sirf zaroorat ho to lamba karo."
 )
 
@@ -64,7 +71,7 @@ async def lifespan(app: FastAPI):
     keep = {"send_message", "search_contacts", "list_chats", "list_messages", "get_chat"}
     wa_tools = [t for t in wa_tools if t.name in keep]
     web = TavilySearch(max_results=1, args_schema=WebSearchInput)
-    tools = wa_tools + [web, find_contact]
+    tools = wa_tools + [web, find_contact] + YOUTUBE_TOOLS
     model = init_chat_model(MODEL, max_retries=6, timeout=120)
     memory = MemorySaver()
     # tool_result_as_text: khali tool result par Groq 400 deta hai, use text bana deta hai
@@ -92,6 +99,9 @@ app.add_middleware(
 class ChatIn(BaseModel):
     message: str
     thread_id: str = "web-session"
+    video_id: str = ""  # player me abhi chalne wali video
+    video_title: str = ""
+    video_time: float = 0
 
 
 class TTSIn(BaseModel):
@@ -119,6 +129,18 @@ def pick_voice(text):
     return ENGLISH_VOICE
 
 
+def youtube_commands(messages):
+    # Is sawal ke tool results me se player ke liye commands
+    commands = []
+    for m in reversed(messages):
+        if m.type == "human":
+            break
+        artifact = getattr(m, "artifact", None)
+        if isinstance(artifact, dict) and "youtube" in artifact:
+            commands.insert(0, artifact["youtube"])
+    return commands
+
+
 @app.get("/")
 def health():
     return {"status": "ok", "agent": "ready" if "agent" in STATE else "loading"}
@@ -129,12 +151,25 @@ async def chat(inp: ChatIn):
     agent = STATE.get("agent")
     if agent is None:
         return {"reply": "Agent abhi load ho raha hai, thodi der baad try karo."}
+    message = inp.message
+    if inp.video_id:
+        # Taake "is video/gaane" ka matlab agent ko pata ho
+        message = f"(Player me abhi chal rahi hai: {inp.video_title})\n{message}"
     try:
         result = await agent.ainvoke(
-            {"messages": [{"role": "user", "content": inp.message}]},
-            config={"configurable": {"thread_id": inp.thread_id}},
+            {"messages": [{"role": "user", "content": message}]},
+            config={
+                "configurable": {
+                    "thread_id": inp.thread_id,
+                    "video_id": inp.video_id,
+                    "video_time": inp.video_time,
+                }
+            },
         )
-        return {"reply": _text(result["messages"][-1].content)}
+        return {
+            "reply": _text(result["messages"][-1].content),
+            "youtube": youtube_commands(result["messages"]),
+        }
     except Exception as e:
         return {"reply": f"[error] {type(e).__name__}: {e}"}
 
