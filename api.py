@@ -151,6 +151,8 @@ async def tts(inp: TTSIn):
         async for chunk in communicate.stream():
             if chunk["type"] == "audio":
                 audio += chunk["data"]
+        if not audio:
+            return Response(status_code=204)
         return Response(content=audio, media_type="audio/mpeg")
     except Exception as e:
         return Response(content=str(e).encode(), status_code=500)

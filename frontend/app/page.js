@@ -34,12 +34,13 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text }),
       });
-      if (!res.ok) return;
+      if (!res.ok || res.status === 204) return;
       const blob = await res.blob();
+      if (!blob.size) return; // khaali audio play karne par NotSupportedError aata hai
       const url = URL.createObjectURL(blob);
       const audio = new Audio(url);
       audioRef.current = audio;
-      audio.play();
+      await audio.play(); // await taake play ka error neeche catch ho jaye
     } catch (e) {}
   }
 
