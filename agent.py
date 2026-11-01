@@ -12,6 +12,7 @@ from langchain_core.messages import ToolMessage
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain_tavily import TavilySearch
 from langgraph.checkpoint.memory import MemorySaver
+from pydantic import BaseModel, Field
 
 load_dotenv()
 
@@ -42,6 +43,11 @@ SYSTEM_PROMPT = (
 )
 
 CONFIG = {"configurable": {"thread_id": "whatsapp-session"}}
+
+
+# Model ko sirf query do — warna woh ghalat topic (jaise "weather") bhej deta hai aur Groq 400 deta hai
+class WebSearchInput(BaseModel):
+    query: str = Field(description="Web par search karne ke liye query")
 
 
 @wrap_tool_call
@@ -78,7 +84,7 @@ async def build_agent():
     print(f"[ok] WhatsApp se {len(wa_tools)} tools load hue.")
 
     # Web search (Tavily) + naam se contact dhoondhne wala tool
-    web = TavilySearch(max_results=1)
+    web = TavilySearch(max_results=1, args_schema=WebSearchInput)
     tools = wa_tools + [web, find_contact]
     print(f"[ok] Web search aur find_contact tools bhi add ho gaye. Total: {len(tools)} tools.")
 

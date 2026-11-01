@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 import edge_tts
 from langchain.chat_models import init_chat_model
@@ -28,6 +28,11 @@ WHATSAPP_MCP_PATH = os.environ["WHATSAPP_MCP_PATH"]
 # Realistic neural voices (free)
 URDU_VOICE = "ur-PK-UzmaNeural"      # mard ke liye: ur-PK-AsadNeural
 ENGLISH_VOICE = "en-US-AriaNeural"   # mard ke liye: en-US-GuyNeural
+
+
+# Model ko sirf query do — warna woh ghalat topic (jaise "weather") bhej deta hai aur Groq 400 deta hai
+class WebSearchInput(BaseModel):
+    query: str = Field(description="Web par search karne ke liye query")
 
 SYSTEM_PROMPT = (
     "Tum ek helpful WhatsApp assistant ho. "
@@ -61,7 +66,7 @@ async def lifespan(app: FastAPI):
     wa_tools = await client.get_tools()
     keep = {"send_message", "search_contacts", "list_chats", "list_messages", "get_chat"}
     wa_tools = [t for t in wa_tools if t.name in keep]
-    web = TavilySearch(max_results=1)
+    web = TavilySearch(max_results=1, args_schema=WebSearchInput)
     tools = wa_tools + [web]
     model = init_chat_model(MODEL, max_retries=6, timeout=120)
     memory = MemorySaver()

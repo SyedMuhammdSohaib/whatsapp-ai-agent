@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 
-const API = "http://localhost:8000";
+const API = "http://127.0.0.1:8000";
 
 export default function Home() {
   const [messages, setMessages] = useState([
