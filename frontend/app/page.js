@@ -3,6 +3,8 @@
 import { useState, useRef, useEffect } from "react";
 
 const API = "http://127.0.0.1:8000";
+const SILENCE_MS = 4000; // itni der chup rehne par message chala jaye
+const NO_SPEECH_MS = 10000; // kuch bola hi nahi to mic band
 
 export default function Home() {
   const [messages, setMessages] = useState([
@@ -81,17 +83,53 @@ export default function Home() {
     }
     const rec = new SR();
     rec.lang = lang;
-    rec.interimResults = false;
+    rec.continuous = true; // chhoti pause par band na ho
+    rec.interimResults = true;
     rec.maxAlternatives = 1;
-    rec.onresult = (e) => {
-      const t = e.results[0][0].transcript;
-      setInput(t);
-      setTimeout(() => sendText(t), 150);
+
+    let finalText = "";
+    let interim = "";
+    let done = false;
+    let timer;
+    const finish = () => {
+      done = true;
+      clearTimeout(timer);
+      rec.stop();
     };
-    rec.onend = () => setListening(false);
-    rec.onerror = () => setListening(false);
-    recRef.current = rec;
+    const waitFor = (ms) => {
+      clearTimeout(timer);
+      timer = setTimeout(finish, ms);
+    };
+
+    rec.onresult = (e) => {
+      interim = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const t = e.results[i][0].transcript.trim();
+        if (e.results[i].isFinal) finalText += t + " ";
+        else interim += t + " ";
+      }
+      setInput((finalText + interim).trim());
+      waitFor(SILENCE_MS);
+    };
+    rec.onend = () => {
+      // Chrome khud bhi session band kar deta hai, user bol raha ho to dobara shuru karo
+      if (!done) {
+        rec.start();
+        return;
+      }
+      setListening(false);
+      const text = (finalText + interim).trim();
+      if (text) sendText(text);
+    };
+    rec.onerror = (e) => {
+      if (e.error !== "no-speech") {
+        done = true;
+        clearTimeout(timer);
+      }
+    };
+    recRef.current = { stop: finish };
     setListening(true);
+    waitFor(NO_SPEECH_MS);
     rec.start();
   }
 
