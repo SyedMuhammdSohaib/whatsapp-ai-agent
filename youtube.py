@@ -5,13 +5,12 @@ dete hain jo /chat ke zariye frontend tak jati hai.
 """
 
 import asyncio
-import os
 from typing import Literal
 
 import yt_dlp
-from langchain.chat_models import init_chat_model
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
+from models import model_with_fallbacks
 from youtube_transcript_api import YouTubeTranscriptApi
 
 SEARCH_RESULTS = 5  # kuch videos embed nahi hoti, player phir agli try karta hai
@@ -124,7 +123,7 @@ async def explain_youtube_video(question: str, config: RunnableConfig) -> str:
         )
 
     if _model is None:
-        _model = init_chat_model(os.environ["MODEL"], max_retries=6, timeout=120)
+        _model = model_with_fallbacks()
     result = await _model.ainvoke(
         f"Video: {title}\nUser abhi video ke {int(video_time)} second par hai.\n\n{source}\n\n"
         f"Sawal: {question}\n\n"

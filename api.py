@@ -14,13 +14,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 import edge_tts
-from agent import WebSearchInput, tool_result_as_text
+from agent import WebSearchInput, send_recent_history, tool_result_as_text
 from contacts import find_contact
 from langchain.agents import create_agent
-from langchain.chat_models import init_chat_model
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain_tavily import TavilySearch
 from langgraph.checkpoint.memory import MemorySaver
+from models import fallback_middleware, make_model
 from youtube import YOUTUBE_TOOLS
 
 load_dotenv()
@@ -72,14 +72,14 @@ async def lifespan(app: FastAPI):
     wa_tools = [t for t in wa_tools if t.name in keep]
     web = TavilySearch(max_results=1, args_schema=WebSearchInput)
     tools = wa_tools + [web, find_contact] + YOUTUBE_TOOLS
-    model = init_chat_model(MODEL, max_retries=6, timeout=120)
+    model = make_model(MODEL)
     memory = MemorySaver()
     # tool_result_as_text: khali tool result par Groq 400 deta hai, use text bana deta hai
     STATE["agent"] = create_agent(
         model,
         tools,
         system_prompt=SYSTEM_PROMPT,
-        middleware=[tool_result_as_text],
+        middleware=[send_recent_history, fallback_middleware(), tool_result_as_text],
         checkpointer=memory,
     )
     print(f"[ok] Agent ready with {len(tools)} tools.")
@@ -166,6 +166,7 @@ async def chat(inp: ChatIn):
                 }
             },
         )
+        print(f"[model] {result['messages'][-1].response_metadata.get('model_name')}")
         return {
             "reply": _text(result["messages"][-1].content),
             "youtube": youtube_commands(result["messages"]),

@@ -41,5 +41,7 @@ For questions that need fresh information, it searches the web first.
 
 Conversation memory is kept in RAM, so it resets when the agent is restarted.
 
+To save tokens, only the last 6 turns are sent to the model. If a model fails or hits its rate limit, the agent switches to the next one in `FALLBACK_MODELS` (`models.py`).
+
 ## Note
 This is a personal portfolio project for learning AI agents and tool-use.

@@ -6,12 +6,12 @@ import voice
 from contacts import find_contact
 from dotenv import load_dotenv
 from langchain.agents import create_agent
-from langchain.agents.middleware import wrap_tool_call
-from langchain.chat_models import init_chat_model
+from langchain.agents.middleware import wrap_model_call, wrap_tool_call
 from langchain_core.messages import ToolMessage
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain_tavily import TavilySearch
 from langgraph.checkpoint.memory import MemorySaver
+from models import fallback_middleware, make_model
 from pydantic import BaseModel, Field
 
 load_dotenv()
@@ -43,6 +43,31 @@ SYSTEM_PROMPT = (
 )
 
 CONFIG = {"configurable": {"thread_id": "whatsapp-session"}}
+
+# Groq ki rozana token limit bachane ke liye model ko sirf haal ki baat-cheet jati hai
+HISTORY_TURNS = 6
+OLD_TOOL_RESULT_CHARS = 500
+
+
+def recent_messages(messages):
+    # User ke sawal se shuru karo, taake tool result apni tool call ke baghair na jaye
+    human_indexes = [i for i, m in enumerate(messages) if m.type == "human"]
+    if not human_indexes:
+        return messages
+    start = human_indexes[-HISTORY_TURNS] if len(human_indexes) > HISTORY_TURNS else 0
+    current_turn = human_indexes[-1]
+    recent = []
+    for i, m in enumerate(messages[start:], start):
+        too_long = isinstance(m.content, str) and len(m.content) > OLD_TOOL_RESULT_CHARS
+        if m.type == "tool" and i < current_turn and too_long:
+            m = m.model_copy(update={"content": m.content[:OLD_TOOL_RESULT_CHARS] + " ...(chhota kiya gaya)"})
+        recent.append(m)
+    return recent
+
+
+@wrap_model_call
+async def send_recent_history(request, handler):
+    return await handler(request.override(messages=recent_messages(request.messages)))
 
 
 # Model ko sirf query do — warna woh ghalat topic (jaise "weather") bhej deta hai aur Groq 400 deta hai
@@ -88,13 +113,13 @@ async def build_agent():
     tools = wa_tools + [web, find_contact]
     print(f"[ok] Web search aur find_contact tools bhi add ho gaye. Total: {len(tools)} tools.")
 
-    model = init_chat_model(MODEL, max_retries=6, timeout=120)
+    model = make_model(MODEL)
     memory = MemorySaver()
     return create_agent(
         model,
         tools,
         system_prompt=SYSTEM_PROMPT,
-        middleware=[tool_result_as_text],
+        middleware=[send_recent_history, fallback_middleware(), tool_result_as_text],
         checkpointer=memory,
     )
 
