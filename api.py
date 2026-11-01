@@ -11,14 +11,16 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 import edge_tts
+from agent import WebSearchInput, tool_result_as_text
+from contacts import find_contact
+from langchain.agents import create_agent
 from langchain.chat_models import init_chat_model
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain_tavily import TavilySearch
 from langgraph.checkpoint.memory import MemorySaver
-from langgraph.prebuilt import create_react_agent
 
 load_dotenv()
 
@@ -28,11 +30,6 @@ WHATSAPP_MCP_PATH = os.environ["WHATSAPP_MCP_PATH"]
 # Realistic neural voices (free)
 URDU_VOICE = "ur-PK-UzmaNeural"      # mard ke liye: ur-PK-AsadNeural
 ENGLISH_VOICE = "en-US-AriaNeural"   # mard ke liye: en-US-GuyNeural
-
-
-# Model ko sirf query do — warna woh ghalat topic (jaise "weather") bhej deta hai aur Groq 400 deta hai
-class WebSearchInput(BaseModel):
-    query: str = Field(description="Web par search karne ke liye query")
 
 SYSTEM_PROMPT = (
     "Tum ek helpful WhatsApp assistant ho. "
@@ -67,11 +64,16 @@ async def lifespan(app: FastAPI):
     keep = {"send_message", "search_contacts", "list_chats", "list_messages", "get_chat"}
     wa_tools = [t for t in wa_tools if t.name in keep]
     web = TavilySearch(max_results=1, args_schema=WebSearchInput)
-    tools = wa_tools + [web]
+    tools = wa_tools + [web, find_contact]
     model = init_chat_model(MODEL, max_retries=6, timeout=120)
     memory = MemorySaver()
-    STATE["agent"] = create_react_agent(
-        model, tools, prompt=SYSTEM_PROMPT, checkpointer=memory
+    # tool_result_as_text: khali tool result par Groq 400 deta hai, use text bana deta hai
+    STATE["agent"] = create_agent(
+        model,
+        tools,
+        system_prompt=SYSTEM_PROMPT,
+        middleware=[tool_result_as_text],
+        checkpointer=memory,
     )
     print(f"[ok] Agent ready with {len(tools)} tools.")
     yield
