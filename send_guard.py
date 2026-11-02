@@ -7,6 +7,7 @@ ke zariye nahi guzarta. Isi liye WhatsApp message me likhi koi hidayat bhi kuch 
 import json
 import re
 import time
+from datetime import datetime
 
 from contacts import _load_contacts
 from langchain.agents.middleware import wrap_tool_call
@@ -14,7 +15,8 @@ from langchain_core.messages import AIMessage, ToolMessage
 from langgraph.config import get_config
 from whatsapp_summary import _canonical, _lid_map, _name
 
-SEND_TOOLS = {"send_message", "send_file", "send_audio_message"}
+SEND_TOOLS = {"send_message", "send_file", "send_audio_message", "schedule_message"}
+TIME_FORMAT = "%Y-%m-%d %H:%M"
 HOLD_SECONDS = 600  # itni der baad "haan" purane message par na lage
 
 YES = {
@@ -42,9 +44,14 @@ def _label(recipient):
     return recipient if name in recipient else f"{name} ({recipient})"
 
 
+def describe_time(send_at):
+    return datetime.strptime(send_at, TIME_FORMAT).strftime("%A, %d %B %Y, %I:%M %p")
+
+
 def _describe(args):
     body = f"Message: {args['message']}" if "message" in args else f"File: {args.get('media_path', '')}"
-    return f"Kisko: {_label(str(args.get('recipient', '')))}\n{body}"
+    when = f"\nKab: {describe_time(args['send_at'])}" if "send_at" in args else ""
+    return f"Kisko: {_label(str(args.get('recipient', '')))}{when}\n{body}"
 
 
 def _outcome(result):
@@ -69,6 +76,10 @@ async def hold_for_approval(request, handler):
     call = request.tool_call
     if call["name"] not in SEND_TOOLS:
         return await handler(request)
+    validate = (request.tool.metadata or {}).get("validate")
+    error = validate(call["args"]) if validate else None
+    if error:
+        return ToolMessage(error, tool_call_id=call["id"])
     thread_id = get_config()["configurable"]["thread_id"]
     held = _pending.setdefault(thread_id, {"since": time.time(), "calls": []})
     held["calls"].append({"tool": request.tool, "name": call["name"], "args": call["args"]})
@@ -97,6 +108,8 @@ async def _send(call):
     except Exception as e:
         success, detail = False, f"{type(e).__name__}: {e}"
     who = _label(str(call["args"].get("recipient", "")))
+    if success and "send_at" in call["args"]:
+        return f"⏰ {who} ko {describe_time(call['args']['send_at'])} par bhej dunga. Us waqt backend aur bridge chalu hone chahiye."
     if success:
         return f"✅ {who} ko bhej diya."
     if success is None:

@@ -12,6 +12,7 @@ Built with **LangGraph** (agent brain) + **whatsapp-mcp** (WhatsApp bridge) + **
 - Voice input: press Enter on an empty prompt, speak, press Enter again (Groq Whisper speech-to-text)
 - Send by contact name: looks up names saved on your phone (from the bridge database), no phone number needed
 - WhatsApp summaries: see who messaged you and get a summary of one chat, a group or the whole day (read-only, by contact name)
+- Scheduled messages in the web app: "send this tomorrow at 9", with list and cancel; saved across restarts, sent while the backend and bridge are running
 - YouTube in the web app: play any video or song, pause, resume, skip forward or back, and ask what a video contains (uses its transcript)
 
 ## Tech Stack
