@@ -14,7 +14,7 @@ from memories import MEMORY_TOOLS, add_memories, guard_memory, make_checkpointer
 from models import fallback_middleware, make_model
 from pydantic import BaseModel, Field
 from send_guard import answer_pending, hold_for_approval, pending_prompt
-from whatsapp_summary import WHATSAPP_SUMMARY_TOOLS
+from whatsapp_summary import WHATSAPP_SUMMARY_TOOLS, show_real_names
 
 load_dotenv()
 
@@ -120,7 +120,7 @@ async def build_agent():
         model,
         tools,
         system_prompt=SYSTEM_PROMPT,
-        middleware=[add_memories, send_recent_history, fallback_middleware(), tool_result_as_text, guard_memory, hold_for_approval],
+        middleware=[add_memories, send_recent_history, fallback_middleware(), show_real_names, tool_result_as_text, guard_memory, hold_for_approval],
         checkpointer=memory,
     )
 

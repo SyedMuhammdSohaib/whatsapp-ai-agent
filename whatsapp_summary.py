@@ -4,9 +4,13 @@ Bridge ke messages.db ko sirf padhte hain.
 """
 
 import asyncio
+import json
+import re
 from datetime import datetime, timedelta
 
 from contacts import _connect, _load_contacts, _rows
+from langchain.agents.middleware import wrap_tool_call
+from langchain_core.messages import ToolMessage
 from langchain_core.tools import tool
 from models import model_with_fallbacks
 
@@ -14,6 +18,14 @@ MAX_CHARS = 12000  # Groq token limit ke andar rehne ke liye
 MAX_CHATS = 10  # poore din ke khulase me sabse zyada active chats
 MAX_LISTED = 20
 MAX_HOURS = 24 * 7
+
+# Inke jawab me bridge aksar naam ki jagah number deta hai
+NUMBER_TOOLS = {
+    "list_chats", "get_chat", "search_contacts", "list_messages", "get_contact_chats",
+    "get_direct_chat_by_contact", "get_last_interaction",
+}
+_MESSAGE_CHAT = re.compile(r"^(\[[\d\- :]+\] Chat: )(\d+)( From: )")
+_MESSAGE_SENDER = re.compile(r"^(\[[\d\- :]+\] (?:Chat: .*? )?From: )(\d+)(: )")
 
 _model = None
 
@@ -41,6 +53,49 @@ def _name(jid, contacts):
     if names:
         return max(names, key=len)
     return "Group" if jid.endswith("@g.us") else jid.split("@")[0]
+
+
+def _is_number(text):
+    return isinstance(text, str) and text.split("@")[0].isdigit()
+
+
+def _with_names(text):
+    """Tool ke jawab me number ki jagah naam. Naam na mile to @lid ki jagah asli number."""
+    lid_to_pn = _lid_map()
+    contacts = _load_contacts()
+
+    def label(value):
+        return _name(_canonical(f"{value.split('@')[0]}@s.whatsapp.net", lid_to_pn), contacts)
+
+    def swap(match):
+        return f"{match[1]}{label(match[2])}{match[3]}"
+
+    lines = []
+    for line in text.split("\n"):
+        item = None
+        if line.startswith("{"):
+            try:
+                item = json.loads(line)
+            except ValueError:
+                pass
+        if not isinstance(item, dict):
+            lines.append(_MESSAGE_SENDER.sub(swap, _MESSAGE_CHAT.sub(swap, line)))
+            continue
+        # jid aur phone_number waise hi rehte hain, bhejne ke kaam aate hain
+        if item.get("jid") and (not item.get("name") or _is_number(item["name"])):
+            item["name"] = _name(_canonical(item["jid"], lid_to_pn), contacts)
+        if _is_number(item.get("last_sender")):
+            item["last_sender"] = label(item["last_sender"])
+        lines.append(json.dumps(item, ensure_ascii=False))
+    return "\n".join(lines)
+
+
+@wrap_tool_call
+async def show_real_names(request, handler):
+    result = await handler(request)
+    if request.tool_call["name"] in NUMBER_TOOLS and isinstance(result, ToolMessage) and isinstance(result.content, str):
+        result.content = await asyncio.to_thread(_with_names, result.content)
+    return result
 
 
 def _load_chats(hours):
