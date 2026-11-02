@@ -13,6 +13,7 @@ from langchain_tavily import TavilySearch
 from langgraph.checkpoint.memory import MemorySaver
 from models import fallback_middleware, make_model
 from pydantic import BaseModel, Field
+from whatsapp_summary import WHATSAPP_SUMMARY_TOOLS
 
 load_dotenv()
 
@@ -110,7 +111,7 @@ async def build_agent():
 
     # Web search (Tavily) + naam se contact dhoondhne wala tool
     web = TavilySearch(max_results=1, args_schema=WebSearchInput)
-    tools = wa_tools + [web, find_contact]
+    tools = wa_tools + [web, find_contact] + WHATSAPP_SUMMARY_TOOLS
     print(f"[ok] Web search aur find_contact tools bhi add ho gaye. Total: {len(tools)} tools.")
 
     model = make_model(MODEL)

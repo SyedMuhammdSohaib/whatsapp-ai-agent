@@ -129,7 +129,8 @@ async def explain_youtube_video(question: str, config: RunnableConfig) -> str:
         f"Sawal: {question}\n\n"
         "Sirf upar di gayi maloomat se jawab do, apni taraf se kuch na banao. "
         "Gaana ho to bol na dohrao, uska matlab aur mazmoon apne alfaaz me samjhao. "
-        "Jawab user ki zaban me do, seedha aur wazeh."
+        "Jawab user ki zaban me do, seedha aur wazeh. Urdu ho to saaf Urdu script (اردو) me, "
+        "Hindi ya Devanagari kabhi nahi."
     )
     return result.text() if callable(getattr(result, "text", None)) else str(result.content)
 
