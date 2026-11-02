@@ -19,7 +19,7 @@ from contacts import find_contact
 from langchain.agents import create_agent
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain_tavily import TavilySearch
-from langgraph.checkpoint.memory import MemorySaver
+from memories import MEMORY_TOOLS, add_memories, guard_memory, make_checkpointer
 from models import fallback_middleware, make_model
 from scheduled import SCHEDULE_TOOLS, start_scheduler, take_notices, tell_current_time
 from send_guard import answer_pending, hold_for_approval, pending_prompt
@@ -59,6 +59,7 @@ SYSTEM_PROMPT = (
     "Ye kaam tool ke baghair kabhi mat bolo ke ho gaya. "
     "Chalti video ke baare me koi bhi sawal ho to pehle explain_youtube_video chalao, "
     "user se transcript ya naam mat maango. "
+    "User 'yaad rakho' kahe to remember_fact, yaad rakhi baatein dekhne ko list_memories, aur hatane ko forget_memory use karo. "
     "Tumhe baat-cheet yaad rehti hai, context use karo. Jawab hamesha CHHOTA aur seedha rakho (1-2 line), sirf zaroorat ho to lamba karo."
 )
 
@@ -81,20 +82,21 @@ async def lifespan(app: FastAPI):
     wa_tools = [t for t in wa_tools if t.name in keep]
     scheduler = start_scheduler(next(t for t in wa_tools if t.name == "send_message"))
     web = TavilySearch(max_results=1, args_schema=WebSearchInput)
-    tools = wa_tools + [web, find_contact] + WHATSAPP_SUMMARY_TOOLS + SCHEDULE_TOOLS + YOUTUBE_TOOLS
+    tools = wa_tools + [web, find_contact] + WHATSAPP_SUMMARY_TOOLS + SCHEDULE_TOOLS + MEMORY_TOOLS + YOUTUBE_TOOLS
     model = make_model(MODEL)
-    memory = MemorySaver()
+    memory = await make_checkpointer()
     # tool_result_as_text: khali tool result par Groq 400 deta hai, use text bana deta hai
     STATE["agent"] = create_agent(
         model,
         tools,
         system_prompt=SYSTEM_PROMPT,
-        middleware=[tell_current_time, send_recent_history, fallback_middleware(), tool_result_as_text, hold_for_approval],
+        middleware=[tell_current_time, add_memories, send_recent_history, fallback_middleware(), tool_result_as_text, guard_memory, hold_for_approval],
         checkpointer=memory,
     )
     print(f"[ok] Agent ready with {len(tools)} tools.")
     yield
     scheduler.cancel()
+    await memory.conn.close()
     STATE.clear()
 
 

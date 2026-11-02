@@ -6,7 +6,7 @@ Built with **LangGraph** (agent brain) + **whatsapp-mcp** (WhatsApp bridge) + **
 ## Features
 - Natural language to WhatsApp actions (send messages, search chats, read history)
 - Sending is held in code until you say yes, and shows exactly who and what will be sent (safety)
-- Remembers conversation context (memory)
+- Remembers conversations across restarts, and facts you explicitly ask it to remember
 - 12 WhatsApp tools via Model Context Protocol (MCP)
 - Web search (Tavily) for real-time info like weather, rates and news
 - Voice input: press Enter on an empty prompt, speak, press Enter again (Groq Whisper speech-to-text)
@@ -41,7 +41,7 @@ You type a request in plain language. The LangGraph agent interprets it, asks fo
 confirmation, and then calls the appropriate WhatsApp MCP tool to carry it out.
 For questions that need fresh information, it searches the web first.
 
-Conversation memory is kept in RAM, so it resets when the agent is restarted.
+Conversations are saved in `chat_history.db` and facts you ask it to remember in `memories.db`, so both survive restarts. Both files stay on your computer and out of git. Stop the app and delete them to erase its memory.
 
 To save tokens, only the last 6 turns are sent to the model. If a model fails or hits its rate limit, the agent switches to the next one in `FALLBACK_MODELS` (`models.py`).
 

@@ -10,7 +10,7 @@ from langchain.agents.middleware import wrap_model_call, wrap_tool_call
 from langchain_core.messages import ToolMessage
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain_tavily import TavilySearch
-from langgraph.checkpoint.memory import MemorySaver
+from memories import MEMORY_TOOLS, add_memories, guard_memory, make_checkpointer
 from models import fallback_middleware, make_model
 from pydantic import BaseModel, Field
 from send_guard import answer_pending, hold_for_approval, pending_prompt
@@ -39,6 +39,7 @@ SYSTEM_PROMPT = (
     "find_contact karo, aur jawab hamesha Roman Urdu me do. "
     "Message bhejne ke liye seedha send_message chalao, khud confirm mat poocho. System "
     "bhejne se pehle user se khud confirm karwata hai aur user ka jawab bhi khud sambhalta hai. "
+    "User 'yaad rakho' kahe to remember_fact, yaad rakhi baatein dekhne ko list_memories, aur hatane ko forget_memory use karo. "
     "Tumhe baat-cheet yaad rehti hai, context use karo."
 )
 
@@ -110,16 +111,16 @@ async def build_agent():
 
     # Web search (Tavily) + naam se contact dhoondhne wala tool
     web = TavilySearch(max_results=1, args_schema=WebSearchInput)
-    tools = wa_tools + [web, find_contact] + WHATSAPP_SUMMARY_TOOLS
+    tools = wa_tools + [web, find_contact] + WHATSAPP_SUMMARY_TOOLS + MEMORY_TOOLS
     print(f"[ok] Web search aur find_contact tools bhi add ho gaye. Total: {len(tools)} tools.")
 
     model = make_model(MODEL)
-    memory = MemorySaver()
+    memory = await make_checkpointer()
     return create_agent(
         model,
         tools,
         system_prompt=SYSTEM_PROMPT,
-        middleware=[send_recent_history, fallback_middleware(), tool_result_as_text, hold_for_approval],
+        middleware=[add_memories, send_recent_history, fallback_middleware(), tool_result_as_text, guard_memory, hold_for_approval],
         checkpointer=memory,
     )
 
@@ -156,6 +157,7 @@ async def main():
         except Exception as e:
             print(f"[network/error] {type(e).__name__}: {e}")
             print("[info] Phir se likho - connection slow tha shayad.\n")
+    await agent.checkpointer.conn.close()
 
 
 if __name__ == "__main__":
