@@ -5,7 +5,7 @@ Built with **LangGraph** (agent brain) + **whatsapp-mcp** (WhatsApp bridge) + **
 
 ## Features
 - Natural language to WhatsApp actions (send messages, search chats, read history)
-- Confirms before sending any message (safety)
+- Sending is held in code until you say yes, and shows exactly who and what will be sent (safety)
 - Remembers conversation context (memory)
 - 12 WhatsApp tools via Model Context Protocol (MCP)
 - Web search (Tavily) for real-time info like weather, rates and news

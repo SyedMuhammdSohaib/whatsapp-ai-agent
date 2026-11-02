@@ -13,6 +13,7 @@ from langchain_tavily import TavilySearch
 from langgraph.checkpoint.memory import MemorySaver
 from models import fallback_middleware, make_model
 from pydantic import BaseModel, Field
+from send_guard import answer_pending, hold_for_approval, pending_prompt
 from whatsapp_summary import WHATSAPP_SUMMARY_TOOLS
 
 load_dotenv()
@@ -36,10 +37,8 @@ SYSTEM_PROMPT = (
     "User kabhi bol kar (voice) likhwata hai, to text Urdu script me ya "
     "galat spelling ke saath aa sakta hai; naam ko Roman/English me badal kar "
     "find_contact karo, aur jawab hamesha Roman Urdu me do. "
-    "Message bhejne se PEHLE user ko hamesha confirm karo, aur confirm karte "
-    "waqt contact ka naam aur number dono dikhao. "
-    "Jab user confirm kar de (haan / yes), to pichhle message ko bina dobara "
-    "pooche send_message tool se bhej do. "
+    "Message bhejne ke liye seedha send_message chalao, khud confirm mat poocho. System "
+    "bhejne se pehle user se khud confirm karwata hai aur user ka jawab bhi khud sambhalta hai. "
     "Tumhe baat-cheet yaad rehti hai, context use karo."
 )
 
@@ -120,7 +119,7 @@ async def build_agent():
         model,
         tools,
         system_prompt=SYSTEM_PROMPT,
-        middleware=[send_recent_history, fallback_middleware(), tool_result_as_text],
+        middleware=[send_recent_history, fallback_middleware(), tool_result_as_text, hold_for_approval],
         checkpointer=memory,
     )
 
@@ -144,11 +143,16 @@ async def main():
                 continue
             print(f"[suna] {user_input}")
         try:
+            reply, note = await answer_pending(agent, CONFIG, user_input)
+            if reply:
+                print(f"agent> {reply}\n")
+                continue
             result = await agent.ainvoke(
                 {"messages": [{"role": "user", "content": user_input}]},
                 config=CONFIG,
             )
-            print(f"agent> {result['messages'][-1].content}\n")
+            reply = pending_prompt(CONFIG["configurable"]["thread_id"]) or result["messages"][-1].content
+            print(f"agent> {note}{reply}\n")
         except Exception as e:
             print(f"[network/error] {type(e).__name__}: {e}")
             print("[info] Phir se likho - connection slow tha shayad.\n")
