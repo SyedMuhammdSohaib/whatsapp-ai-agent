@@ -6,6 +6,7 @@ const API = "http://127.0.0.1:8000";
 const SILENCE_MS = 4000; // itni der chup rehne par message chala jaye
 const NO_SPEECH_MS = 10000; // kuch bola hi nahi to mic band
 const SPEAKING_VOLUME = 20; // agent bol raha ho to video ki awaaz halki
+const REMINDER_CHECK_MS = 20000;
 
 let youtubeApi;
 function loadYouTubeApi() {
@@ -34,10 +35,33 @@ export default function Home() {
   const playerRef = useRef(null);
   const videoRef = useRef(null);
   const queueRef = useRef([]);
+  const speakRef = useRef(null);
+  const shownRemindersRef = useRef(new Set());
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
+
+  useEffect(() => {
+    async function checkReminders() {
+      try {
+        const res = await fetch(`${API}/reminders`);
+        const due = (await res.json()).filter((r) => !shownRemindersRef.current.has(r.id));
+        if (!due.length) return;
+        due.forEach((r) => shownRemindersRef.current.add(r.id));
+        setMessages((m) => [...m, ...due.map((r) => ({ role: "agent", text: r.text }))]);
+        speakRef.current(due.map((r) => r.text).join("\n"));
+        await fetch(`${API}/reminders/shown`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ids: due.map((r) => r.id) }),
+        });
+      } catch (e) {} // backend band hai to agle chakkar me
+    }
+    checkReminders();
+    const timer = setInterval(checkReminders, REMINDER_CHECK_MS);
+    return () => clearInterval(timer);
+  }, []);
 
   // Realistic voice: backend /tts se mp3 le ke bajao
   async function speak(text) {
@@ -67,6 +91,7 @@ export default function Home() {
       }
     } catch (e) {}
   }
+  speakRef.current = speak; // timer ko speaker on/off ki taaza halat mile
 
   // Kuch videos embed nahi hoti, un par player error deta hai to agli chalao
   async function playNext() {

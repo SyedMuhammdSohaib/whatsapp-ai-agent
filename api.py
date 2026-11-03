@@ -21,6 +21,7 @@ from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain_tavily import TavilySearch
 from memories import MEMORY_TOOLS, add_memories, guard_memory, make_checkpointer
 from models import fallback_middleware, make_model
+from reminders import REMINDER_TOOLS, due_reminders, mark_shown
 from scheduled import SCHEDULE_TOOLS, start_scheduler, take_notices, tell_current_time
 from send_guard import answer_pending, hold_for_approval, pending_prompt
 from whatsapp_summary import WHATSAPP_SUMMARY_TOOLS, show_real_names
@@ -60,6 +61,7 @@ SYSTEM_PROMPT = (
     "Chalti video ke baare me koi bhi sawal ho to pehle explain_youtube_video chalao, "
     "user se transcript ya naam mat maango. "
     "User 'yaad rakho' kahe to remember_fact, yaad rakhi baatein dekhne ko list_memories, aur hatane ko forget_memory use karo. "
+    "User kisi waqt 'yaad dilana' kahe to set_reminder, unki list ke liye list_reminders, aur cancel ke liye cancel_reminder use karo. "
     "Tumhe baat-cheet yaad rehti hai, context use karo. Jawab hamesha CHHOTA aur seedha rakho (1-2 line), sirf zaroorat ho to lamba karo."
 )
 
@@ -82,7 +84,7 @@ async def lifespan(app: FastAPI):
     wa_tools = [t for t in wa_tools if t.name in keep]
     scheduler = start_scheduler(next(t for t in wa_tools if t.name == "send_message"))
     web = TavilySearch(max_results=1, args_schema=WebSearchInput)
-    tools = wa_tools + [web, find_contact] + WHATSAPP_SUMMARY_TOOLS + SCHEDULE_TOOLS + MEMORY_TOOLS + YOUTUBE_TOOLS
+    tools = wa_tools + [web, find_contact] + WHATSAPP_SUMMARY_TOOLS + SCHEDULE_TOOLS + REMINDER_TOOLS + MEMORY_TOOLS + YOUTUBE_TOOLS
     model = make_model(MODEL)
     memory = await make_checkpointer()
     # tool_result_as_text: khali tool result par Groq 400 deta hai, use text bana deta hai
@@ -121,6 +123,10 @@ class ChatIn(BaseModel):
 class TTSIn(BaseModel):
     text: str
     voice: str = ""  # khaali = auto-detect
+
+
+class RemindersShownIn(BaseModel):
+    ids: list[int]
 
 
 def _text(content):
@@ -192,6 +198,18 @@ async def chat(inp: ChatIn):
         }
     except Exception as e:
         return {"reply": f"{notices}[error] {type(e).__name__}: {e}"}
+
+
+@app.get("/reminders")
+def reminders():
+    return due_reminders()
+
+
+# Dikhane ke baad hi shown: JSON body ki wajah se doosri website ye CORS ke baghair nahi chala sakti
+@app.post("/reminders/shown")
+def reminders_shown(inp: RemindersShownIn):
+    mark_shown(inp.ids)
+    return {"ok": True}
 
 
 @app.post("/tts")

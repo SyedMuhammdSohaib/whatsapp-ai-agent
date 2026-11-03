@@ -94,9 +94,9 @@ def forget_memory(id: int) -> str:
 
 @wrap_tool_call
 async def guard_memory(request, handler):
-    # Bahar ka koi message agent ko dhoka de kar memory na badal sake
+    # Bahar ka koi message agent ko dhoka de kar memory ya reminders na badal sake
     call = request.tool_call
-    if call["name"] not in ("remember_fact", "forget_memory"):
+    if call["name"] not in ("remember_fact", "forget_memory", "set_reminder", "cancel_reminder"):
         return await handler(request)
     turn = []
     for m in reversed(request.state["messages"]):
@@ -108,7 +108,7 @@ async def guard_memory(request, handler):
         question = ""
     refused = None
     if any(m.type == "tool" and m.name in UNTRUSTED_TOOLS for m in turn):
-        refused = "Memory NAHI badli: is sawal me bahar ka data padha gaya hai. User se alag se kehne ko kaho."
+        refused = "Ye kaam NAHI hua: is sawal me bahar ka data padha gaya hai. User se alag se kehne ko kaho."
     elif call["name"] == "remember_fact" and not ASKED_TO_REMEMBER.search(question):
         refused = "Yaad NAHI rakha: user ne khud yaad rakhne ko nahi kaha."
     if refused:
