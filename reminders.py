@@ -34,6 +34,14 @@ def due_reminders():
     ]
 
 
+def todays_reminders():
+    today = datetime.now().strftime("%Y-%m-%d")
+    with _connect() as conn:
+        return conn.execute(
+            "SELECT * FROM reminders WHERE shown=0 AND remind_at LIKE ? ORDER BY remind_at", (f"{today}%",)
+        ).fetchall()
+
+
 def mark_shown(ids):
     with _connect() as conn:
         conn.executemany("UPDATE reminders SET shown=1 WHERE id=?", [(i,) for i in ids])

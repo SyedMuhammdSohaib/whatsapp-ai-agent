@@ -37,6 +37,7 @@ export default function Home() {
   const queueRef = useRef([]);
   const speakRef = useRef(null);
   const shownRemindersRef = useRef(new Set());
+  const briefingShownRef = useRef(false);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -61,6 +62,26 @@ export default function Home() {
     checkReminders();
     const timer = setInterval(checkReminders, REMINDER_CHECK_MS);
     return () => clearInterval(timer);
+  }, []);
+
+  // Din ka pehla app kholne par
+  useEffect(() => {
+    async function showBriefing() {
+      try {
+        const res = await fetch(`${API}/briefing`);
+        const { text } = await res.json();
+        if (!text || briefingShownRef.current) return;
+        briefingShownRef.current = true;
+        setMessages((m) => [...m, { role: "agent", text }]);
+        speakRef.current(text);
+        await fetch(`${API}/briefing/shown`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ shown: true }),
+        });
+      } catch (e) {}
+    }
+    showBriefing();
   }, []);
 
   // Realistic voice: backend /tts se mp3 le ke bajao

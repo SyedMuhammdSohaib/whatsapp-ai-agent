@@ -126,6 +126,15 @@ def take_notices():
     return "\n".join(lines) + "\n\n" if lines else ""
 
 
+def todays_scheduled():
+    today = datetime.now().strftime("%Y-%m-%d")
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT * FROM scheduled WHERE status='pending' AND send_at LIKE ? ORDER BY send_at", (f"{today}%",)
+        ).fetchall()
+    return [{"time": r["send_at"][11:], "to": _label(r["recipient"]), "message": r["message"]} for r in rows]
+
+
 @wrap_model_call
 async def tell_current_time(request, handler):
     # Model ko aaj ki tareekh pata nahi hoti, "kal 9 baje" ke liye chahiye

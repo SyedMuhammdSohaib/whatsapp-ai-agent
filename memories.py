@@ -24,7 +24,7 @@ UNTRUSTED_TOOLS = {
     "list_messages", "list_chats", "get_chat", "search_contacts", "get_direct_chat_by_contact",
     "get_contact_chats", "get_last_interaction", "get_message_context", "download_media",
     "summarize_whatsapp", "whatsapp_activity", "tavily_search", "explain_youtube_video",
-    "play_youtube", "find_contact", "list_scheduled_messages",
+    "play_youtube", "find_contact", "list_scheduled_messages", "daily_briefing",
 }
 ASKED_TO_REMEMBER = re.compile(r"yaad|yad\b|remember|یاد", re.IGNORECASE)
 

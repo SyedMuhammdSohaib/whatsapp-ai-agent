@@ -15,6 +15,7 @@ from pydantic import BaseModel
 
 import edge_tts
 from agent import WebSearchInput, send_recent_history, tool_result_as_text
+from briefing import daily_briefing, first_briefing, mark_briefing_shown
 from contacts import find_contact
 from langchain.agents import create_agent
 from langchain_mcp_adapters.client import MultiServerMCPClient
@@ -62,6 +63,7 @@ SYSTEM_PROMPT = (
     "user se transcript ya naam mat maango. "
     "User 'yaad rakho' kahe to remember_fact, yaad rakhi baatein dekhne ko list_memories, aur hatane ko forget_memory use karo. "
     "User kisi waqt 'yaad dilana' kahe to set_reminder, unki list ke liye list_reminders, aur cancel ke liye cancel_reminder use karo. "
+    "User briefing maange to daily_briefing chalao. "
     "Tumhe baat-cheet yaad rehti hai, context use karo. Jawab hamesha CHHOTA aur seedha rakho (1-2 line), sirf zaroorat ho to lamba karo."
 )
 
@@ -84,7 +86,7 @@ async def lifespan(app: FastAPI):
     wa_tools = [t for t in wa_tools if t.name in keep]
     scheduler = start_scheduler(next(t for t in wa_tools if t.name == "send_message"))
     web = TavilySearch(max_results=1, args_schema=WebSearchInput)
-    tools = wa_tools + [web, find_contact] + WHATSAPP_SUMMARY_TOOLS + SCHEDULE_TOOLS + REMINDER_TOOLS + MEMORY_TOOLS + YOUTUBE_TOOLS
+    tools = wa_tools + [web, find_contact] + WHATSAPP_SUMMARY_TOOLS + SCHEDULE_TOOLS + REMINDER_TOOLS + MEMORY_TOOLS + YOUTUBE_TOOLS + [daily_briefing]
     model = make_model(MODEL)
     memory = await make_checkpointer()
     # tool_result_as_text: khali tool result par Groq 400 deta hai, use text bana deta hai
@@ -127,6 +129,10 @@ class TTSIn(BaseModel):
 
 class RemindersShownIn(BaseModel):
     ids: list[int]
+
+
+class BriefingShownIn(BaseModel):
+    shown: bool = True
 
 
 def _text(content):
@@ -209,6 +215,18 @@ def reminders():
 @app.post("/reminders/shown")
 def reminders_shown(inp: RemindersShownIn):
     mark_shown(inp.ids)
+    return {"ok": True}
+
+
+@app.get("/briefing")
+async def briefing():
+    return {"text": await first_briefing()}
+
+
+# Yahan bhi JSON body: doosri website briefing ko dikhaya hua mark na kar sake
+@app.post("/briefing/shown")
+def briefing_shown(inp: BriefingShownIn):
+    mark_briefing_shown()
     return {"ok": True}
 
 

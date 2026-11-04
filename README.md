@@ -14,6 +14,7 @@ Built with **LangGraph** (agent brain) + **whatsapp-mcp** (WhatsApp bridge) + **
 - WhatsApp summaries: see who messaged you and get a summary of one chat, a group or the whole day (read-only, by contact name)
 - Scheduled messages in the web app: "send this tomorrow at 9", with list and cancel; saved across restarts, sent while the backend and bridge are running
 - Reminders in the web app: "remind me tomorrow at 9", shown in the chat and spoken; if the app was closed, shown when it opens
+- Daily briefing in the web app: today's reminders and scheduled messages, weather and a WhatsApp summary, on the day's first open or on request. Set `BRIEFING_CITY` in `.env` to include the weather
 - YouTube in the web app: play any video or song, pause, resume, skip forward or back, and ask what a video contains (uses its transcript)
 
 ## Tech Stack

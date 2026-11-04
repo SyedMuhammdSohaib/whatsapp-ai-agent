@@ -203,12 +203,8 @@ async def whatsapp_activity(hours: int = 24) -> str:
     return await asyncio.to_thread(_activity, max(1, min(hours, MAX_HOURS)))
 
 
-@tool
-async def summarize_whatsapp(name: str = "", hours: int = 24) -> str:
-    """WhatsApp messages ka khulasa. name: contact ya group ka naam. Poore din ya sab chats
-    ka khulasa chahiye to name khali chhodo. "Aaj" ke liye hours=24, "is hafte" ke liye 168."""
+async def make_summary(name, hours):
     global _model
-    hours = max(1, min(hours, MAX_HOURS))
     source, note = await asyncio.to_thread(_summary_source, name, hours)
     if source is None:
         return note
@@ -224,6 +220,13 @@ async def summarize_whatsapp(name: str = "", hours: int = 24) -> str:
         "Jawab saaf Urdu script (اردو) me do, Hindi ya Devanagari kabhi nahi."
     )
     return f"{result.content}\n{note}"
+
+
+@tool
+async def summarize_whatsapp(name: str = "", hours: int = 24) -> str:
+    """WhatsApp messages ka khulasa. name: contact ya group ka naam. Poore din ya sab chats
+    ka khulasa chahiye to name khali chhodo. "Aaj" ke liye hours=24, "is hafte" ke liye 168."""
+    return await make_summary(name, max(1, min(hours, MAX_HOURS)))
 
 
 WHATSAPP_SUMMARY_TOOLS = [whatsapp_activity, summarize_whatsapp]
