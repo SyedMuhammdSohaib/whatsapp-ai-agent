@@ -7,6 +7,18 @@ const SILENCE_MS = 4000; // itni der chup rehne par message chala jaye
 const NO_SPEECH_MS = 10000; // kuch bola hi nahi to mic band
 const SPEAKING_VOLUME = 20; // agent bol raha ho to video ki awaaz halki
 const REMINDER_CHECK_MS = 20000;
+const STATUS_CHECK_MS = 10000;
+const SUGGESTIONS = [
+  "Aaj ka briefing do",
+  "Aaj kis kis ke message aaye?",
+  "YouTube par koi naat chalao",
+  "2 minute baad chai ka yaad dilana",
+];
+
+// Model **bold** likhta hai, baqi text waisa hi
+function formatted(text) {
+  return String(text).split(/\*\*(.+?)\*\*/g).map((part, i) => (i % 2 ? <strong key={i}>{part}</strong> : part));
+}
 
 let youtubeApi;
 function loadYouTubeApi() {
@@ -21,8 +33,9 @@ function loadYouTubeApi() {
 
 export default function Home() {
   const [messages, setMessages] = useState([
-    { role: "agent", text: "Assalam-o-alaikum! Main aapka WhatsApp AI agent hoon. Likho ya mic se bolo." },
+    { role: "agent", text: "Assalam-o-alaikum! Main Jarvis hoon. Likho ya mic se bolo." },
   ]);
+  const [online, setOnline] = useState(false);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [listening, setListening] = useState(false);
@@ -64,6 +77,20 @@ export default function Home() {
     return () => clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    async function checkStatus() {
+      try {
+        const res = await fetch(API);
+        setOnline((await res.json()).agent === "ready");
+      } catch (e) {
+        setOnline(false);
+      }
+    }
+    checkStatus();
+    const timer = setInterval(checkStatus, STATUS_CHECK_MS);
+    return () => clearInterval(timer);
+  }, []);
+
   // Din ka pehla app kholne par
   useEffect(() => {
     async function showBriefing() {
@@ -95,7 +122,7 @@ export default function Home() {
       const res = await fetch(`${API}/tts`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text: text.replaceAll("**", "") }),
       });
       if (!res.ok || res.status === 204) return;
       const blob = await res.blob();
@@ -266,10 +293,10 @@ export default function Home() {
 
       <div className="chat">
         <header className="head">
-          <div className="dot" />
+          <div className={`dot ${online ? "" : "off"}`} title={online ? "Backend chal raha hai" : "Backend se connection nahi"} />
           <div className="title">
-            <h1>WhatsApp AI Agent</h1>
-            <p>LangGraph · Groq · Voice</p>
+            <h1>Jarvis</h1>
+            <p>{online ? "WhatsApp · YouTube · Reminders · Voice" : "Backend se connection nahi"}</p>
           </div>
           <div className="controls">
             <select value={lang} onChange={(e) => setLang(e.target.value)} title="Mic language">
@@ -293,9 +320,16 @@ export default function Home() {
         <div className="messages">
           {messages.map((m, i) => (
             <div key={i} className={`row ${m.role}`}>
-              <div className={`bubble ${m.role}`}>{m.text}</div>
+              <div className={`bubble ${m.role}`} dir="auto">{formatted(m.text)}</div>
             </div>
           ))}
+          {!messages.some((m) => m.role === "user") && (
+            <div className="suggestions">
+              {SUGGESTIONS.map((s) => (
+                <button key={s} onClick={() => sendText(s)}>{s}</button>
+              ))}
+            </div>
+          )}
           {loading && (
             <div className="row agent">
               <div className="bubble agent typing"><span /><span /><span /></div>
@@ -335,7 +369,7 @@ export default function Home() {
         @keyframes float3 { 0%,100%{transform:translate(0,0) scale(1);} 50%{transform:translate(50px,-60px) scale(1.2);} }
 
         .chat {
-          position: relative; z-index: 1; width: 100%; max-width: 460px; height: 85vh; max-height: 720px;
+          position: relative; z-index: 1; width: 100%; max-width: 520px; height: 85vh; max-height: 720px;
           display: flex; flex-direction: column; background: rgba(255,255,255,0.08);
           backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
           border: 1px solid rgba(255,255,255,0.15); border-radius: 24px;
@@ -344,6 +378,7 @@ export default function Home() {
         .head { display: flex; align-items: center; gap: 12px; padding: 16px 18px;
           background: rgba(255,255,255,0.06); border-bottom: 1px solid rgba(255,255,255,0.1); }
         .dot { width: 12px; height: 12px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 12px #22c55e; flex-shrink: 0; }
+        .dot.off { background: #ef4444; box-shadow: 0 0 12px #ef4444; }
         .title { flex: 1; }
         .title h1 { color: #fff; font-size: 16px; font-weight: 700; }
         .title p { color: rgba(255,255,255,0.6); font-size: 11px; margin-top: 2px; }
@@ -364,6 +399,10 @@ export default function Home() {
           line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; }
         .bubble.user { background: linear-gradient(135deg, #7c3aed, #ec4899); color: #fff; border-bottom-right-radius: 4px; }
         .bubble.agent { background: rgba(255,255,255,0.14); color: #f1f1f1; border-bottom-left-radius: 4px; }
+        .suggestions { display: flex; flex-wrap: wrap; gap: 8px; }
+        .suggestions button { padding: 8px 13px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.2);
+          background: rgba(255,255,255,0.06); color: #f1f1f1; font-size: 13px; cursor: pointer; }
+        .suggestions button:hover { background: rgba(124,58,237,0.4); }
         .typing { display: flex; gap: 5px; align-items: center; }
         .typing span { width: 7px; height: 7px; border-radius: 50%; background: rgba(255,255,255,0.7); animation: blink 1.2s infinite; }
         .typing span:nth-child(2){ animation-delay: .2s; }

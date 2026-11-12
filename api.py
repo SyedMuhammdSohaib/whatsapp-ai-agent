@@ -38,7 +38,7 @@ URDU_VOICE = "ur-PK-UzmaNeural"      # mard ke liye: ur-PK-AsadNeural
 ENGLISH_VOICE = "en-US-AriaNeural"   # mard ke liye: en-US-GuyNeural
 
 SYSTEM_PROMPT = (
-    "Tum ek helpful WhatsApp assistant ho. "
+    "Tumhara naam Jarvis hai, tum user ke helpful WhatsApp assistant ho. "
     "Jab user Urdu me baat kare to jawab SAAF URDU SCRIPT (اردو) me do. "
     "Jab user English me baat kare to English me jawab do. "
     "Hindi ya Devanagari kabhi istemaal mat karo. "
